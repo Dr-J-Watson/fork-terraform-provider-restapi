@@ -49,6 +49,13 @@ resource "restapi_object" "Foo2" {
 - `update_data` (String) Valid JSON object to pass during to update requests.
 - `update_method` (String) Defaults to `update_method` set on the provider. Allows per-resource override of `update_method` (see `update_method` provider config documentation)
 - `update_path` (String) Defaults to `path/{id}`. The API path that represents where to UPDATE (PUT) objects of this type on the API server. The string `{id}` will be replaced with the terraform ID of the object.
+- `status_path` (String) – Defaults to `path/{id}` with a `GET` request. This endpoint must return a JSON object containing a `status` field (e.g., `"status": "processing"`). It is used for polling during long-running operations when `wait = true`.
+- `error_path` (String) – Defaults to `path/{id}` with a `PATCH` request. This endpoint is called when a timeout is reached or when Terraform is canceled (if supported). It must accept a JSON body containing a `status` field (e.g., `"status": "timeout"`).
+- `wait` (Boolean) – If set to `true`, Terraform will wait for the resource to finish processing after creation. This requires the API to support a `status_path` that returns a `status` field. The wait loop continues as long as the status is `"processing"`, and stops once it changes to another value.
+- `timeout` (Number) – Maximum number of seconds to wait for the job to complete when `wait = true`. If the timeout is exceeded, a `PATCH` request is sent to the `error_path` with status `"timeout"`. Default is no timeout (waits indefinitely).
+- `retry_period` (Number) – Interval in seconds between each poll of the `status_path` during the waiting period. Default is 5 seconds.
+
+
 
 ### Read-Only
 

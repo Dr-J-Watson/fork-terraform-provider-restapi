@@ -7,6 +7,7 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -31,6 +32,12 @@ type apiObjectOpts struct {
 	id            string
 	idAttribute   string
 	data          string
+
+	wait          bool
+	timeout       int
+	retryPeriod   int
+	statusPath    string
+	errorPath	  string
 }
 
 /*APIObject is the state holding struct for a restapi_object resource*/
@@ -50,6 +57,13 @@ type APIObject struct {
 	readSearch    map[string]string
 	id            string
 	idAttribute   string
+
+	wait          bool
+	timeout       int
+	retryPeriod   int
+	statusPath    string
+	errorPath   string
+
 
 	/* Set internally */
 	data        map[string]interface{} /* Data as managed by the user */
@@ -112,6 +126,13 @@ func NewAPIObject(iClient *APIClient, opts *apiObjectOpts) (*APIObject, error) {
 		opts.searchPath = opts.path
 	}
 
+	if opts.statusPath == "" {
+		opts.statusPath = opts.getPath
+	}
+	if opts.errorPath == "" {
+		opts.errorPath = opts.getPath
+	}
+
 	obj := APIObject{
 		apiClient:     iClient,
 		getPath:       opts.getPath,
@@ -128,6 +149,13 @@ func NewAPIObject(iClient *APIClient, opts *apiObjectOpts) (*APIObject, error) {
 		readSearch:    opts.readSearch,
 		id:            opts.id,
 		idAttribute:   opts.idAttribute,
+
+		wait:          opts.wait,
+		timeout:       opts.timeout,
+		retryPeriod:   opts.retryPeriod,
+		statusPath:    opts.statusPath,
+		errorPath:     opts.errorPath,
+
 		data:          make(map[string]interface{}),
 		readData:      make(map[string]interface{}),
 		updateData:    make(map[string]interface{}),
@@ -578,3 +606,71 @@ func (obj *APIObject) findObject(queryString string, searchKey string, searchVal
 
 	return objFound, nil
 }
+
+func waitForJobCompletion(obj *APIObject) error {
+	if obj.id == "" {
+		return fmt.Errorf("cannot wait for job completion without object ID")
+	}
+
+	timeoutURL := strings.Replace(obj.errorPath, "{id}", obj.id, -1)
+	canceledURL := strings.Replace(obj.errorPath, "{id}", obj.id, -1)
+	statusURL := strings.Replace(obj.statusPath, "{id}", obj.id, -1)
+
+	if obj.queryString != "" {
+		timeoutURL = fmt.Sprintf("%s?%s", timeoutURL, obj.queryString)
+		canceledURL = fmt.Sprintf("%s?%s", canceledURL, obj.queryString)
+		statusURL = fmt.Sprintf("%s?%s", statusURL, obj.queryString)
+	}
+
+	var timeout time.Duration
+	if obj.timeout > 0 {
+		timeout = time.Duration(obj.timeout) * time.Second
+	} else {
+		timeout = 0 // infini
+	}
+
+	retry := time.Duration(obj.retryPeriod) * time.Second
+	start := time.Now()
+
+	for {
+		if timeout > 0 && time.Since(start) > timeout {
+			jsonBody := `{"status": "timeout"}`
+			obj.apiClient.sendRequest("PATCH", timeoutURL, jsonBody)
+			log.Printf("Timeout reached. Sending PATCH to %s", timeoutURL)
+			return fmt.Errorf("timeout exceeded while waiting for job %s", obj.id)
+		}
+
+		result, err := obj.apiClient.sendRequest("GET", statusURL, "")
+		if err != nil {
+			log.Printf("waitForJobCompletion: GET failed: %v", err)
+			time.Sleep(retry)
+			continue
+		}
+
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+			log.Printf("waitForJobCompletion: JSON parse error: %v", err)
+			time.Sleep(retry)
+			continue
+		}
+
+		status, err := GetStringAtKey(parsed, "status", obj.debug)
+		if err != nil {
+			log.Printf("waitForJobCompletion: failed to extract status: %v", err)
+			time.Sleep(retry)
+			continue
+		}
+
+		if obj.debug {
+			log.Printf("waitForJobCompletion: current job status = %s", status)
+		}
+
+		if status != "processing" {
+			log.Printf("waitForJobCompletion: job %s finished", obj.id)
+			return nil
+		}
+
+		time.Sleep(retry)
+	}
+}
+

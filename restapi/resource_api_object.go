@@ -209,6 +209,34 @@ func resourceRestAPI() *schema.Resource {
 				Optional:    true,
 				Default:     false,
 			},
+			"wait": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Wait for the job to complete by polling the status endpoint after creation.",
+				Default:     false,
+			},
+			"timeout": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Maximum wait time in seconds for job completion.",
+				Default:     0,
+			},
+			"retry_period": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Interval in seconds between status checks.",
+				Default:     5,
+			},
+			"status_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Optional override path to poll the job status. Supports `{id}` placeholder.",
+			},
+			"error_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Optional override path to poll the job timeout. Supports `{id}` placeholder.",
+			},
 		}, /* End schema */
 
 	}
@@ -288,7 +316,12 @@ func resourceRestAPICreate(d *schema.ResourceData, meta interface{}) error {
 		setResourceState(obj, d)
 		/* Only set during create for APIs that don't return sensitive data on subsequent retrieval */
 		d.Set("create_response", obj.apiResponse)
+
+		if obj.wait {
+			err = waitForJobCompletion(obj)
+		}
 	}
+
 	return err
 }
 
@@ -500,6 +533,26 @@ func buildAPIObjectOpts(d *schema.ResourceData) (*apiObjectOpts, error) {
 	if v, ok := d.GetOk("query_string"); ok {
 		opts.queryString = v.(string)
 	}
+
+	if v, ok := d.GetOk("wait"); ok {
+		opts.wait = v.(bool)
+	}
+	if v, ok := d.GetOk("timeout"); ok {
+		opts.timeout = v.(int)
+	}
+	if v, ok := d.GetOk("retry_period"); ok {
+		opts.retryPeriod = v.(int)
+	}
+	if v, ok := d.GetOk("status_path"); ok {
+		opts.statusPath = v.(string)
+	}
+	if v, ok := d.GetOk("timeout_path"); ok {
+		opts.errorPath = v.(string)
+	}
+
+	opts.debug = d.Get("debug").(bool)
+
+
 
 	readSearch := expandReadSearch(d.Get("read_search").(map[string]interface{}))
 	opts.readSearch = readSearch
