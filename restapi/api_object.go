@@ -38,6 +38,8 @@ type apiObjectOpts struct {
 	retryPeriod   int
 	statusPath    string
 	errorPath	  string
+	errorStatus   string
+	processingStatus string
 }
 
 /*APIObject is the state holding struct for a restapi_object resource*/
@@ -63,6 +65,9 @@ type APIObject struct {
 	retryPeriod   int
 	statusPath    string
 	errorPath   string
+	errorStatus   string
+	processingStatus string
+
 
 
 	/* Set internally */
@@ -155,6 +160,10 @@ func NewAPIObject(iClient *APIClient, opts *apiObjectOpts) (*APIObject, error) {
 		retryPeriod:   opts.retryPeriod,
 		statusPath:    opts.statusPath,
 		errorPath:     opts.errorPath,
+		processingStatus: opts.processingStatus,
+		errorStatus:    opts.errorStatus,
+
+
 
 		data:          make(map[string]interface{}),
 		readData:      make(map[string]interface{}),
@@ -613,12 +622,10 @@ func waitForJobCompletion(obj *APIObject) error {
 	}
 
 	timeoutURL := strings.Replace(obj.errorPath, "{id}", obj.id, -1)
-	canceledURL := strings.Replace(obj.errorPath, "{id}", obj.id, -1)
 	statusURL := strings.Replace(obj.statusPath, "{id}", obj.id, -1)
 
 	if obj.queryString != "" {
 		timeoutURL = fmt.Sprintf("%s?%s", timeoutURL, obj.queryString)
-		canceledURL = fmt.Sprintf("%s?%s", canceledURL, obj.queryString)
 		statusURL = fmt.Sprintf("%s?%s", statusURL, obj.queryString)
 	}
 
@@ -665,7 +672,12 @@ func waitForJobCompletion(obj *APIObject) error {
 			log.Printf("waitForJobCompletion: current job status = %s", status)
 		}
 
-		if status != "processing" {
+		if status != obj.processingStatus {
+			
+			if status == obj.errorStatus {
+				return fmt.Errorf("error in the execution for job %s", obj.id)
+			}
+
 			log.Printf("waitForJobCompletion: job %s finished", obj.id)
 			return nil
 		}

@@ -237,6 +237,18 @@ func resourceRestAPI() *schema.Resource {
 				Optional:    true,
 				Description: "Optional override path to poll the job timeout. Supports `{id}` placeholder.",
 			},
+			"processing_status": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Status value indicating that the job is still in progress. Used when polling the job status endpoint. Default: 'processing'.",
+				Default:     "processing",
+			},
+			"error_status": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Status value indicating that the job has failed. Used when polling the job status endpoint. Default: 'error'.",
+				Default:     "error",
+			},
 		}, /* End schema */
 
 	}
@@ -549,6 +561,13 @@ func buildAPIObjectOpts(d *schema.ResourceData) (*apiObjectOpts, error) {
 	if v, ok := d.GetOk("timeout_path"); ok {
 		opts.errorPath = v.(string)
 	}
+	if v, ok := d.GetOk("processing_status"); ok {
+		opts.processingStatus = v.(string)
+	}
+	if v, ok := d.GetOk("error_status"); ok {
+		opts.errorStatus = v.(string)
+	}
+
 
 	opts.debug = d.Get("debug").(bool)
 

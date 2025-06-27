@@ -54,6 +54,9 @@ resource "restapi_object" "Foo2" {
 - `wait` (Boolean) – If set to `true`, Terraform will wait for the resource to finish processing after creation. This requires the API to support a `status_path` that returns a `status` field. The wait loop continues as long as the status is `"processing"`, and stops once it changes to another value.
 - `timeout` (Number) – Maximum number of seconds to wait for the job to complete when `wait = true`. If the timeout is exceeded, a `PATCH` request is sent to the `error_path` with status `"timeout"`. Default is no timeout (waits indefinitely).
 - `retry_period` (Number) – Interval in seconds between each poll of the `status_path` during the waiting period. Default is 5 seconds.
+- `processing_status` (String) – Status value indicating that the job is still in progress during polling. Terraform will continue waiting as long as the status returned by the API matches this value. Default is `"processing"`.
+- `error_status` (String) – Status value indicating that the job has failed. If the API returns this status during polling, Terraform will fail the operation immediately. Default is `"error"`.
+
 
 
 
